@@ -1,0 +1,17 @@
+disable_for:
+  name: Disable for duration
+  description: Temporarily disable blocking on this server for a number of minutes.
+  target:
+    entity:
+      domain: switch
+      integration: adblock_manager
+  fields:
+    minutes:
+      name: Minutes
+      description: How many minutes to disable blocking for.
+      required: true
+      selector:
+        number:
+          min: 1
+          step: 1
+          mode: box
