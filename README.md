@@ -24,7 +24,49 @@ Poll interval and SSL verification are adjustable per server after setup, from t
 |---|---|
 | ![Ad Block Status - off](images/adblock-off.png) | ![Ad Block Status - on](images/adblock-on.png) |
 
-The icon toggle below uses [button-card](https://github.com/custom-cards/button-card) - install it from HACS under Frontend if you don't already have it:
+Both examples use [button-card](https://github.com/custom-cards/button-card) - install it from HACS under Frontend if you don't already have it.
+
+### Option 1: combined card
+
+```yaml
+type: horizontal-stack
+cards:
+  - type: custom:button-card
+    entity: sensor.adblock_overall_status
+    name: Ad Block Status
+    icon: mdi:advertisements
+    color_type: icon
+    tap_action:
+      action: perform-action
+      perform_action: switch.toggle
+      target:
+        entity_id: switch.adblock_overall
+    state:
+      - value: enabled
+        icon: mdi:advertisements-off
+        color: green
+      - value: disabled
+        icon: mdi:advertisements
+        color: red
+      - value: partial
+        icon: mdi:advertisements
+        color: yellow
+      - value: error
+    styles:
+      card:
+        - height: 100%
+  - type: markdown
+    content: >-
+      **Overall Status:** {{ states('sensor.adblock_overall_status') | title }}
+
+      {% for name, status in states.sensor.adblock_overall_status.attributes.items()
+         if name not in ['device_class', 'options', 'friendly_name', 'icon'] %}
+      - **{{ name }}:** {{ status }}
+      {% endfor %}
+title: Adblock
+```
+
+### Option 2: separate cards
 
 ```yaml
 type: custom:button-card
