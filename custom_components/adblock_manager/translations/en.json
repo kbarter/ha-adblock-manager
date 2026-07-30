@@ -1,0 +1,62 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add an AdBlock server",
+        "data": { "server_type": "Server type" }
+      },
+      "technitium": {
+        "title": "Technitium DNS",
+        "data": {
+          "host": "Host (e.g. http://192.168.1.77:5380)",
+          "token": "API token",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      },
+      "pihole": {
+        "title": "Pi-hole",
+        "data": {
+          "host": "Host (e.g. http://192.168.1.75)",
+          "api_version": "Pi-hole API version",
+          "password": "Password (v6 only)",
+          "token": "API token (v5 only)",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate",
+        "data": { "password": "Password", "token": "API token" }
+      }
+    },
+    "error": {
+      "invalid_auth": "Authentication failed. Check the token/password.",
+      "cannot_connect": "Could not connect to the server. Check the host/port."
+    },
+    "abort": {
+      "already_configured": "This server is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "scan_interval": "Poll interval (seconds)",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      }
+    }
+  },
+  "services": {
+    "disable_for": {
+      "name": "Disable for duration",
+      "description": "Temporarily disable blocking for a number of minutes.",
+      "fields": {
+        "minutes": {
+          "name": "Minutes",
+          "description": "How many minutes to disable blocking for."
+        }
+      }
+    }
+  }
+}
