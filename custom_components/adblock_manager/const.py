@@ -17,6 +17,11 @@ DEFAULT_SCAN_INTERVAL = 30
 STATUS_ENABLED = "enabled"
 STATUS_DISABLED = "disabled"
 STATUS_ERROR = "error"
+STATUS_PARTIAL = "partial"
+
+AGGREGATE_OWNER_DATA_KEY = f"{DOMAIN}_aggregate_owner"
+
+SIGNAL_AGGREGATE_UPDATE = f"{DOMAIN}_aggregate_update"
 
 
 class ServerType(StrEnum):

@@ -1,21 +1,28 @@
 """Switch platform for AdBlock Manager."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import voluptuous as vol
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_platform
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .aggregate import (
+    all_coordinators,
+    claim_aggregate_ownership_if_unclaimed,
+    compute_overall_status,
+)
 from .client import AdBlockError
-from .const import DOMAIN, STATUS_DISABLED, STATUS_ENABLED
+from .const import DOMAIN, SIGNAL_AGGREGATE_UPDATE, STATUS_DISABLED, STATUS_ENABLED
 from .coordinator import AdBlockCoordinator
-from .device import build_device_info
+from .device import build_aggregate_device_info, build_device_info
 
 SERVICE_DISABLE_FOR = "disable_for"
 
@@ -24,7 +31,10 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator: AdBlockCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([AdBlockSwitch(coordinator, entry)])
+    entities: list[SwitchEntity] = [AdBlockSwitch(coordinator, entry)]
+    if claim_aggregate_ownership_if_unclaimed(hass, entry):
+        entities.append(AdBlockOverallSwitch())
+    async_add_entities(entities)
 
     platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(
@@ -80,3 +90,53 @@ class AdBlockSwitch(CoordinatorEntity[AdBlockCoordinator], SwitchEntity):
                 f"Failed to disable blocking for {minutes} minutes: {err}"
             ) from err
         await self.coordinator.async_request_refresh()
+
+
+class AdBlockOverallSwitch(SwitchEntity):
+    """Turns blocking on/off across every configured server at once."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Overall"
+    _attr_should_poll = False
+    _attr_unique_id = f"{DOMAIN}_aggregate_switch"
+    _attr_device_info = build_aggregate_device_info()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, SIGNAL_AGGREGATE_UPDATE, self._handle_update
+            )
+        )
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def is_on(self) -> bool:
+        statuses = [c.data["status"] for c in all_coordinators(self.hass)]
+        return compute_overall_status(statuses) == STATUS_ENABLED
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._async_set_all("enable")
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._async_set_all("disable")
+
+    async def _async_set_all(self, action: str) -> None:
+        coordinators = all_coordinators(self.hass)
+        results = await asyncio.gather(
+            *(c.client.async_set_status(action) for c in coordinators),
+            return_exceptions=True,
+        )
+        failed = [
+            c.config_entry.title
+            for c, result in zip(coordinators, results, strict=True)
+            if isinstance(result, Exception)
+        ]
+        await asyncio.gather(*(c.async_request_refresh() for c in coordinators))
+        if failed:
+            raise HomeAssistantError(
+                f"Failed to {action} blocking on: {', '.join(failed)}"
+            )
