@@ -5,7 +5,10 @@ from custom_components.adblock_manager.client import (
     AdBlockAuthError,
     AdBlockConnectionError,
 )
-from custom_components.adblock_manager.coordinator import AdBlockCoordinator
+from custom_components.adblock_manager.coordinator import (
+    BURST_REFRESH_DELAYS,
+    AdBlockCoordinator,
+)
 
 
 class FakeClient:
@@ -57,3 +60,31 @@ async def test_coordinator_auth_error_marks_update_failed(
     await hass.async_block_till_done()
     flows = hass.config_entries.flow.async_progress()
     assert any(f["context"]["source"] == "reauth" for f in flows)
+
+
+async def test_schedule_burst_refresh_polls_multiple_times(
+    hass: HomeAssistant, mock_config_entry, monkeypatch
+) -> None:
+    mock_config_entry.add_to_hass(hass)
+    calls = []
+
+    class CountingClient(FakeClient):
+        async def async_get_status(self):
+            calls.append(None)
+            return await super().async_get_status()
+
+    client = CountingClient(result={"status": "enabled", "disabled_until": None})
+    coordinator = AdBlockCoordinator(hass, mock_config_entry, client, 30)
+    await coordinator.async_refresh()
+    assert len(calls) == 1
+
+    async def instant_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "custom_components.adblock_manager.coordinator.asyncio.sleep", instant_sleep
+    )
+
+    await coordinator.async_schedule_burst_refresh()
+
+    assert len(calls) == 1 + len(BURST_REFRESH_DELAYS)

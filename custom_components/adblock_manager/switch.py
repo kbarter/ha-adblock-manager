@@ -73,14 +73,16 @@ class AdBlockSwitch(CoordinatorEntity[AdBlockCoordinator], SwitchEntity):
             await self.coordinator.client.async_set_status("enable")
         except AdBlockError as err:
             raise HomeAssistantError(f"Failed to enable blocking: {err}") from err
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_refresh()
+        self.coordinator.async_schedule_burst_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         try:
             await self.coordinator.client.async_set_status("disable")
         except AdBlockError as err:
             raise HomeAssistantError(f"Failed to disable blocking: {err}") from err
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_refresh()
+        self.coordinator.async_schedule_burst_refresh()
 
     async def async_disable_for(self, minutes: int) -> None:
         try:
@@ -89,7 +91,8 @@ class AdBlockSwitch(CoordinatorEntity[AdBlockCoordinator], SwitchEntity):
             raise HomeAssistantError(
                 f"Failed to disable blocking for {minutes} minutes: {err}"
             ) from err
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_refresh()
+        self.coordinator.async_schedule_burst_refresh()
 
 
 class AdBlockOverallSwitch(SwitchEntity):
@@ -135,7 +138,9 @@ class AdBlockOverallSwitch(SwitchEntity):
             for c, result in zip(coordinators, results, strict=True)
             if isinstance(result, Exception)
         ]
-        await asyncio.gather(*(c.async_request_refresh() for c in coordinators))
+        await asyncio.gather(*(c.async_refresh() for c in coordinators))
+        for c in coordinators:
+            c.async_schedule_burst_refresh()
         if failed:
             raise HomeAssistantError(
                 f"Failed to {action} blocking on: {', '.join(failed)}"
