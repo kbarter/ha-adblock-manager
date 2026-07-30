@@ -1,6 +1,7 @@
 """DataUpdateCoordinator for AdBlock Manager."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 
@@ -13,6 +14,12 @@ from .client import AdBlockAuthError, AdBlockConnectionError, DNSClient
 from .const import DOMAIN, STATUS_ERROR
 
 _LOGGER = logging.getLogger(__name__)
+
+# Enabling blocking can involve the server reloading its blocklist
+# before its own status reflects it, while disabling is usually
+# immediate - poll again shortly after any action instead of waiting
+# for the next full scan_interval tick.
+BURST_REFRESH_DELAYS = (5, 15)
 
 
 class AdBlockCoordinator(DataUpdateCoordinator[dict]):
@@ -48,3 +55,18 @@ class AdBlockCoordinator(DataUpdateCoordinator[dict]):
                 "error_message": str(err),
                 "disabled_until": None,
             }
+
+    def async_schedule_burst_refresh(self) -> asyncio.Task[None]:
+        """Poll again a few times shortly after an action, without blocking it."""
+        return self.config_entry.async_create_background_task(
+            self.hass, self._async_burst_refresh(), f"{self.name}_burst_refresh"
+        )
+
+    async def _async_burst_refresh(self) -> None:
+        # async_refresh(), not async_request_refresh() - the latter goes
+        # through a 10s-cooldown debouncer, which would silently coalesce
+        # these deliberately-spaced polls into one delayed call instead of
+        # running them at the times below.
+        for delay in BURST_REFRESH_DELAYS:
+            await asyncio.sleep(delay)
+            await self.async_refresh()
