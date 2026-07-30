@@ -1,0 +1,12 @@
+# Pinned so CI resolves exactly what local dev has. HA's config-entry and
+# coordinator APIs change every release, so an unpinned resolve silently
+# tests a different HA than the one developed against.
+# pytest-homeassistant-custom-component 0.13.195 pins homeassistant==2024.12.5,
+# pytest==8.3.3 and pytest-asyncio==0.24.0 itself; the explicit pins below
+# match those exactly rather than conflicting with them.
+homeassistant==2024.12.5
+pytest-homeassistant-custom-component==0.13.195
+pytest==8.3.3
+pytest-asyncio==0.24.0
+PyYAML>=6.0
+ruff==0.16.0
