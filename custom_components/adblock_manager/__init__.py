@@ -5,7 +5,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_TOKEN, CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
+from .aggregate import release_aggregate_ownership
 from .client import PiHoleClient, TechnitiumClient
 from .config_flow import CONF_SCAN_INTERVAL
 from .const import (
@@ -14,6 +16,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     PLATFORMS,
+    SIGNAL_AGGREGATE_UPDATE,
     ServerType,
 )
 from .coordinator import AdBlockCoordinator
@@ -43,8 +46,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     coordinator = AdBlockCoordinator(hass, entry, client, scan_interval)
     await coordinator.async_config_entry_first_refresh()
+    coordinator.async_add_listener(
+        lambda: async_dispatcher_send(hass, SIGNAL_AGGREGATE_UPDATE)
+    )
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    # The set of coordinators changed - tell the aggregate entities now
+    # rather than waiting for the next per-coordinator poll.
+    async_dispatcher_send(hass, SIGNAL_AGGREGATE_UPDATE)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
@@ -60,4 +69,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         coordinator: AdBlockCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
         await coordinator.client.async_close()
+        # The set of coordinators changed - tell the aggregate entities
+        # now rather than waiting for the next per-coordinator poll.
+        async_dispatcher_send(hass, SIGNAL_AGGREGATE_UPDATE)
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Hand off aggregate ownership when the owning entry is permanently removed.
+
+    Only fires on true removal, not a reload. Awaiting the reload here
+    (instead of a background task) ensures the remaining entry
+    re-claims ownership, and Home Assistant re-associates the aggregate
+    entities' registry rows, before this entry's own cleanup runs.
+    """
+    remaining_owner_entry_id = release_aggregate_ownership(hass, entry)
+    if remaining_owner_entry_id:
+        await hass.config_entries.async_reload(remaining_owner_entry_id)

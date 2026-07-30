@@ -32,3 +32,15 @@ def build_device_info(entry: ConfigEntry) -> DeviceInfo:
         manufacturer=manufacturer,
         model=model,
     )
+
+
+def build_aggregate_device_info() -> DeviceInfo:
+    """Return the virtual device shared by the cross-entry aggregate entities.
+
+    Unlike `build_device_info`, this isn't tied to any single config
+    entry - it represents every configured server combined.
+    """
+    return DeviceInfo(
+        identifiers={(DOMAIN, "aggregate")},
+        name="AdBlock",
+    )

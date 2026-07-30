@@ -1,5 +1,7 @@
 """Shared test fixtures."""
 import pytest
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.adblock_manager.const import DOMAIN
@@ -26,3 +28,48 @@ def mock_config_entry() -> MockConfigEntry:
         },
         unique_id="pihole:http://pihole.example.com",
     )
+
+
+@pytest.fixture
+def setup_two_entries():
+    """Register and set up two AdBlock Manager config entries together.
+
+    Configure `aioclient_mock` for both hosts first, then await with
+    just `hass`. Only entry_a is explicitly set up - HA's domain
+    bootstrap loads both since they're already registered; a second
+    `async_setup` call on entry_b would raise `OperationNotAllowed`.
+    """
+
+    async def _setup_two_entries(
+        hass: HomeAssistant,
+    ) -> tuple[MockConfigEntry, MockConfigEntry]:
+        entry_a = MockConfigEntry(
+            domain=DOMAIN,
+            title="Server A",
+            data={
+                "server_type": "technitium",
+                "host": "http://a.example.com",
+                "token": "tok",
+                "verify_ssl": True,
+            },
+            unique_id="technitium:http://a.example.com",
+        )
+        entry_b = MockConfigEntry(
+            domain=DOMAIN,
+            title="Server B",
+            data={
+                "server_type": "technitium",
+                "host": "http://b.example.com",
+                "token": "tok",
+                "verify_ssl": True,
+            },
+            unique_id="technitium:http://b.example.com",
+        )
+        entry_a.add_to_hass(hass)
+        entry_b.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry_a.entry_id)
+        await hass.async_block_till_done()
+        assert entry_b.state is ConfigEntryState.LOADED
+        return entry_a, entry_b
+
+    return _setup_two_entries
