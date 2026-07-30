@@ -1,4 +1,5 @@
 """Shared test fixtures."""
+import pycares
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
@@ -7,6 +8,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.adblock_manager.const import DOMAIN
 
 pytest_plugins = "pytest_homeassistant_custom_component"
+
+# pycares starts a permanent daemon thread on first use and never joins
+# it (by design). Whichever test triggers that first gets falsely
+# blamed by the per-test "no new threads" check. Pre-warm it here so
+# it's already running before any test's thread snapshot.
+pycares.Channel()
 
 
 @pytest.fixture(autouse=True)
